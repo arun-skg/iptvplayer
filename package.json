@@ -1,0 +1,19 @@
+{
+  "name": "iptv-player-pro",
+  "version": "1.0.0",
+  "description": "Web-based IPTV Player with Channel Enrichment",
+  "scripts": {
+    "build": "node enrich_channels.js",
+    "update-status": "node update_status.js",
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "iptv",
+    "player",
+    "hls",
+    "m3u"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {}
+}
