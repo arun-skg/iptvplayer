@@ -248,10 +248,6 @@
             if (prevStatus === false && isOnline === true) {
                 showNotification(`${channel.name} is back online!`);
             }
-
-            // Update visible card if exists
-            // This requires searching the DOM which is expensive, ignoring for now
-            // or we could add ID to cards
         }
 
         function showNotification(message) {
@@ -294,7 +290,6 @@
         async function fetchPlaylist() {
             try {
                 if(loaderStatus) loaderStatus.textContent = "Fetching channel data...";
-                // Try to load enriched data first
                 const response = await fetch('./enriched_channels.json');
                 if (!response.ok) throw new Error("Enriched data not found");
                 
@@ -308,13 +303,13 @@
                     language: c.language || 'Other',
                     country: c.country || 'Unknown',
                     website: c.website,
-                    online: c.online, // Pre-checked status
+                    online: c.online,
                     last_checked: c.last_checked
                 }));
 
                 statusIndicator.textContent = `${allChannels.length.toLocaleString()} Channels`;
                 if(loaderStatus) loaderStatus.textContent = "Classifying channels...";
-                runClassifierAgent(); // Run AI Agent on loaded data
+                runClassifierAgent();
                 populateFilters();
                 applyFilters();
                 showNotification("Loaded enriched channel data");
@@ -326,7 +321,7 @@
                     const response = await fetch(M3U_URL);
                     const text = await response.text();
                     parseM3U(text);
-                    runClassifierAgent(); // Run AI Agent
+                    runClassifierAgent();
                     statusIndicator.textContent = `${allChannels.length.toLocaleString()} Channels`;
                     populateFilters();
                     applyFilters();
@@ -382,7 +377,6 @@
             const card = document.createElement('div');
             card.className = 'channel-card bg-gray-800/40 rounded-2xl p-3 border border-gray-800 hover:border-indigo-500/50 transition-all group relative flex flex-col';
             
-            // Use local cache if available, otherwise fall back to pre-checked data
             let isOnline = null;
             if (channelStatus[channel.url]) {
                 isOnline = channelStatus[channel.url].online;
@@ -394,6 +388,8 @@
             if (isOnline === true) statusColor = 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]';
             else if (isOnline === false) statusColor = 'bg-red-500';
             
+            const isHttp = channel.url.startsWith('http://');
+
             const logoHtml = channel.logo
                 ? `<img src="${channel.logo}" class="w-full aspect-square object-contain bg-gray-900/50 rounded-xl mb-3 p-3 transition-transform group-hover:scale-105" onerror="this.src='https://via.placeholder.com/150/111827/FFFFFF?text=${encodeURIComponent(channel.name.charAt(0))}'">`
                 : `<div class="w-full aspect-square bg-indigo-900/10 rounded-xl mb-3 flex items-center justify-center text-indigo-500/50 font-bold text-4xl">${channel.name.charAt(0)}</div>`;
@@ -406,9 +402,16 @@
                     <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mt-1 truncate opacity-60">${channel.group}</p>
                 </div>
                 <div class="mt-4 flex flex-col gap-2">
-                    <button onclick="playChannel('${encodeURIComponent(JSON.stringify(channel)).replace(/'/g, "%27")}')" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all">
-                        Play Online
-                    </button>
+                    <div class="relative group/playbtn">
+                        <button 
+                            onclick="${isHttp ? '' : `playChannel('${encodeURIComponent(JSON.stringify(channel)).replace(/'/g, "%27")}')`}" 
+                            class="w-full ${isHttp ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white'} text-[11px] font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all"
+                            ${isHttp ? 'disabled' : ''}
+                        >
+                            Play Online
+                        </button>
+                        ${isHttp ? `<div class="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold opacity-0 group-hover/playbtn:opacity-100 transition-opacity bg-gray-800/80 rounded-lg p-1 text-center">We are working to fix this issue</div>` : ''}
+                    </div>
                     <button onclick="openInVLC('${channel.url}')" class="w-full bg-gray-700/50 hover:bg-orange-600 hover:text-white text-gray-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all">
                         VLC Player
                     </button>
@@ -435,23 +438,19 @@
             const channel = JSON.parse(decodeURIComponent(encodedChannel));
             activeChannel = channel;
             
-            // UI Updates
             document.getElementById('currentChannelName').textContent = channel.name;
             document.getElementById('currentChannelUrl').textContent = channel.url;
             document.getElementById('playerContainer').classList.remove('hidden');
             playerError.classList.add('hidden');
             
-            // Scroll to player
             document.getElementById('playerContainer').scrollIntoView({ behavior: 'smooth' });
             
             loadStream(channel.url);
         }
 
         function loadStream(url) {
-            // Strategy List: [Direct, Proxy1, Proxy2, Proxy3...]
             const strategies = [];
             
-            // If secure context and http url, skip direct for that specific case to avoid mixed content block
             if (!(window.location.protocol === 'https:' && url.startsWith('http:'))) {
                 strategies.push({ name: 'Direct', url: url });
             }
@@ -497,11 +496,10 @@
                      if (data.fatal) {
                         console.warn(`Strategy ${strategy.name} failed:`, data);
                         hls.destroy();
-                        playStrategy(index + 1, strategies); // Switch to next player/proxy
+                        playStrategy(index + 1, strategies);
                      }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                 // Safari Native
                  video.src = strategy.url;
                  const errorHandler = (e) => {
                      video.removeEventListener('error', errorHandler);
@@ -518,20 +516,17 @@
             }
         });
         
-        // Wire up proxy retry button
         proxyRetryBtn.addEventListener('click', () => {
             if(activeChannel) {
                  playerError.classList.add('hidden');
-                 loadStream(activeChannel.url); // Restart strategy rotation
+                 loadStream(activeChannel.url);
             }
         });
         
-        // Wire up VLC button in error overlay
         document.getElementById('vlcFallbackBtn').addEventListener('click', () => {
             if(activeChannel) openInVLC(activeChannel.url);
         });
 
-        // Wire up main VLC button
         document.getElementById('vlcMainBtn').addEventListener('click', () => {
             if(activeChannel) openInVLC(activeChannel.url);
         });
@@ -583,11 +578,10 @@
             scanBtn.classList.add('bg-red-600', 'hover:bg-red-500', 'animate-pulse');
             scanBtnText.textContent = 'Stop Scan';
             
-            grid.innerHTML = ''; // Clear grid to show only online
+            grid.innerHTML = '';
             let onlineCount = 0;
             let checkedCount = 0;
             
-            // Scan current filtered list
             const channelsToCheck = [...getFilteredChannels()];
             const BATCH_SIZE = 5;
             
@@ -628,7 +622,6 @@
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000);
                 
-                // Try direct first
                 try {
                     const response = await fetch(channel.url, { 
                         method: 'HEAD', 
@@ -638,7 +631,6 @@
                     if (response.ok) {
                         isOnline = true;
                     } else {
-                         // Direct failed or 404, try proxy
                          isOnline = await checkViaProxy(channel.url);
                     }
                 } catch (e) {
@@ -681,7 +673,7 @@
             '.fr': 'French', '.de': 'German', '.it': 'Italian', '.es': 'Spanish', 
             '.ru': 'Russian', '.cn': 'Chinese', '.jp': 'Japanese', '.br': 'Portuguese',
             '.in': 'Hindi', '.uk': 'English', '.us': 'English', '.au': 'English',
-            '.ca': 'English', '.mx': 'Spanish', '.ar': 'Spanish', '.nl': 'Dutch',
+            '.ca': 'English', '.mx': 'Spanish', '.nl': 'Dutch',
             '.pl': 'Polish', '.tr': 'Turkish'
         };
 
@@ -708,18 +700,15 @@
             let classifiedCount = 0;
             
             allChannels.forEach(c => {
-                // Use saved classification if available
                 if(channelClassifications[c.url]) {
                     c.language = channelClassifications[c.url].language;
                     return;
                 }
 
                 let detected = null;
-                // Check TLD
                 for(const [tld, lang] of Object.entries(TLD_MAP)) {
                     if(c.url.includes(tld)) { detected = lang; break; }
                 }
-                // Check Name
                 if(!detected) {
                     const lowerName = c.name.toLowerCase();
                     for(const [word, lang] of Object.entries(WORD_MAP)) {
@@ -727,7 +716,6 @@
                     }
                 }
                 
-                // Force update if detected as Tamil (fixing Hindi mislabel) or if unclassified
                 if(detected && (c.language === 'Other' || !c.language || c.language === 'Unspecified' || detected === 'Tamil')) {
                     if(c.language !== detected) {
                         c.language = detected;
@@ -747,21 +735,18 @@
         }
 
         function populateFilters() {
-            // Language
             const languages = new Set(allChannels.map(c => c.language).filter(l => l));
             const sortedLanguages = ['All', ...Array.from(languages).sort()];
             languageFilter.innerHTML = sortedLanguages.map(lang =>
                 `<option value="${lang}" ${lang === savedLanguage ? 'selected' : ''}>${lang}</option>`
             ).join('');
 
-            // Country
             const countries = new Set(allChannels.map(c => c.country).filter(c => c && c !== 'Unknown'));
             const sortedCountries = ['All', ...Array.from(countries).sort()];
             countryFilter.innerHTML = sortedCountries.map(c =>
                 `<option value="${c}" ${c === savedCountry ? 'selected' : ''}>${c}</option>`
             ).join('');
 
-            // Type (Group)
             const types = new Set(allChannels.map(c => c.group).filter(g => g));
             const sortedTypes = ['All', ...Array.from(types).sort()];
             typeFilter.innerHTML = sortedTypes.map(t =>
@@ -807,10 +792,8 @@
             searchDebounce = setTimeout(applyFilters, 250);
         });
 
-        // Background Monitor: Periodically check random channels
         setInterval(() => {
             if (isScanning || allChannels.length === 0) return;
-            // Check 1 random channel every 3 seconds to update background status
             const randomIdx = Math.floor(Math.random() * allChannels.length);
             checkChannelConnectivity(allChannels[randomIdx]);
         }, 3000);
