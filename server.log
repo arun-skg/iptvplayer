@@ -1,7 +1,0 @@
-
-> iptv-player-pro@1.0.0 start
-> npx serve .
-
- INFO  Accepting connections at http://localhost:61394
-
- INFO  Gracefully shutting down. Please wait...
