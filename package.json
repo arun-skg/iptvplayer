@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Web-based IPTV Player with Channel Enrichment",
   "scripts": {
-    "build": "node enrich_channels.js",
+    "build": "node enrich_channels.js && mkdir -p dist && cp index.html enriched_channels.json dist/",
     "update-status": "node update_status.js",
     "start": "npx serve ."
   },
