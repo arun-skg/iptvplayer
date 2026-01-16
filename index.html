@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV Explorer - Web & VLC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
+    <style>
+        .channel-card:hover {
+            transform: translateY(-4px);
+            transition: all 0.3s ease;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 10px;
+        }
+        .video-glow {
+            box-shadow: 0 0 50px -12px rgba(99, 102, 241, 0.25);
+        }
+        .error-overlay {
+            background: rgba(17, 24, 39, 0.98);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans custom-scrollbar">
+
+    <!-- Header / Search -->
+    <header class="sticky top-0 z-50 bg-gray-900/95 backdrop-blur border-b border-gray-800 p-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 p-2 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white leading-none">IPTV Player Pro</h1>
+                    <span class="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Enhanced Playback Engine</span>
+                </div>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                <select id="statusFilter" class="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none pr-4">
+                    <option value="All">All Status</option>
+                    <option value="Online">Online Only</option>
+                </select>
+            </div>
+
+            <!-- Country Filter -->
+            <div class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <select id="countryFilter" class="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none pr-4">
+                    <option value="All">All Countries</option>
+                </select>
+            </div>
+
+            <!-- Language Filter -->
+            <div class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                </svg>
+                <select id="languageFilter" class="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none pr-4">
+                    <option value="All">All Languages</option>
+                </select>
+            </div>
+
+            <!-- Type Filter -->
+            <div class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                <select id="typeFilter" class="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none pr-4">
+                    <option value="All">All Types</option>
+                </select>
+            </div>
+            
+            <div class="relative flex-grow max-w-xl">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Search thousands of channels..." 
+                    class="w-full bg-gray-800 border border-gray-700 rounded-full py-2 px-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+                >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-3 top-2.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button id="scanBtn" class="bg-gray-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 transition-all border border-gray-600 hover:border-indigo-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span id="scanBtnText">Live Scan</span>
+                </button>
+                <div id="statusIndicator" class="hidden md:block text-xs font-medium px-3 py-1 rounded-full bg-gray-800 text-gray-400">
+                    Initializing...
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
+        <!-- Built-in Web Player Section -->
+        <section id="playerContainer" class="hidden mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div class="relative group">
+                <div class="bg-black rounded-2xl overflow-hidden video-glow border border-gray-800 aspect-video relative shadow-2xl">
+                    <video id="videoPlayer" controls class="w-full h-full bg-black"></video>
+                    
+                    <!-- Error Overlay -->
+                    <div id="playerError" class="hidden absolute inset-0 error-overlay flex flex-col items-center justify-center p-8 text-center z-20">
+                        <div class="bg-red-500/10 p-4 rounded-full mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-2">Browser Security Block</h3>
+                        <p class="text-sm text-gray-400 max-w-md mb-8">
+                            This stream is protected by CORS policies that prevent browser-based playback. 
+                            <span class="text-indigo-400 block mt-2 font-medium">Please use VLC to bypass browser restrictions.</span>
+                        </p>
+                        <div class="flex flex-wrap justify-center gap-4">
+                            <button id="vlcFallbackBtn" class="bg-orange-600 hover:bg-orange-500 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:scale-105 shadow-xl shadow-orange-900/20">
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e6/VLC_Icon.svg" class="h-5 w-5" alt="VLC">
+                                Open in VLC
+                            </button>
+                            <button id="proxyRetryBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-bold transition-all text-sm">
+                                Try with Proxy (Experimental)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Close Button -->
+                    <button onclick="closePlayer()" class="absolute top-4 right-4 bg-black/60 hover:bg-red-600 text-white p-2 rounded-full transition-all z-30">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-4 p-5 bg-gray-800/50 border border-gray-700 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="overflow-hidden">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span id="playerStatusDot" class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                        <h2 id="currentChannelName" class="text-xl font-bold text-white leading-tight truncate">Select a channel</h2>
+                    </div>
+                    <p id="currentChannelUrl" class="text-xs text-gray-500 font-mono truncate opacity-60"></p>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                   <button id="vlcMainBtn" class="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all text-sm">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/e/e6/VLC_Icon.svg" class="h-4 w-4" alt="VLC">
+                        VLC
+                   </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Channel Grid -->
+        <div id="channelsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5"></div>
+
+        <div id="noResults" class="hidden text-center py-32">
+            <h3 class="text-xl font-medium text-gray-400">No channels found</h3>
+        </div>
+    </main>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer" class="fixed bottom-4 right-4 z-40 flex flex-col gap-2 pointer-events-none"></div>
+
+    <template id="skeleton">
+        <div class="bg-gray-800/40 rounded-2xl p-4 border border-gray-800 animate-pulse">
+            <div class="w-full aspect-square bg-gray-700/50 rounded-xl mb-4"></div>
+            <div class="h-4 bg-gray-700/50 rounded w-3/4 mb-2"></div>
+            <div class="h-3 bg-gray-700/50 rounded w-1/2"></div>
+        </div>
+    </template>
+
+    <script>
+        const M3U_URL = 'https://iptv-org.github.io/iptv/index.m3u';
+        // Public CORS proxies to try if direct fetch fails
+        const PROXIES = [
+            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+            (url) => `https://thingproxy.freeboard.io/fetch/${url}`
+        ];
+
+        let allChannels = [];
+        const grid = document.getElementById('channelsGrid');
+        const searchInput = document.getElementById('searchInput');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const video = document.getElementById('videoPlayer');
+        const playerError = document.getElementById('playerError');
+        const playerStatusDot = document.getElementById('playerStatusDot');
+        const proxyRetryBtn = document.getElementById('proxyRetryBtn');
+        const languageFilter = document.getElementById('languageFilter');
+        const countryFilter = document.getElementById('countryFilter');
+        const typeFilter = document.getElementById('typeFilter');
+        const statusFilter = document.getElementById('statusFilter');
+        const notificationContainer = document.getElementById('notificationContainer');
+        let hls = null;
+        let activeChannel = null;
+
+        // Load saved preferences
+        let savedLanguage = localStorage.getItem('iptv_language_filter');
+        if (!savedLanguage) savedLanguage = 'Tamil'; // Default to Tamil
+        const savedCountry = localStorage.getItem('iptv_country_filter');
+        const savedType = localStorage.getItem('iptv_type_filter');
+        let channelStatus = {};
+        try {
+            const savedStatus = localStorage.getItem('iptv_channel_status');
+            if (savedStatus) channelStatus = JSON.parse(savedStatus);
+        } catch (e) { console.warn("Failed to load status cache"); }
+
+        function updateStatus(channel, isOnline) {
+            const url = channel.url;
+            const prevStatus = channelStatus[url]?.online;
+            
+            channelStatus[url] = { online: isOnline, ts: Date.now() };
+            localStorage.setItem('iptv_channel_status', JSON.stringify(channelStatus));
+            
+            // Update the channel object in memory as well
+            const channelInMemory = allChannels.find(c => c.url === url);
+            if (channelInMemory) {
+                channelInMemory.online = isOnline;
+                channelInMemory.last_checked = Date.now();
+            }
+
+            if (prevStatus === false && isOnline === true) {
+                showNotification(`${channel.name} is back online!`);
+            }
+
+            // Update visible card if exists
+            // This requires searching the DOM which is expensive, ignoring for now
+            // or we could add ID to cards
+        }
+
+        function showNotification(message) {
+            const notif = document.createElement('div');
+            notif.className = 'bg-gray-800 border border-indigo-500 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300 pointer-events-auto min-w-[250px] max-w-sm';
+            notif.innerHTML = `
+                <div class="bg-green-500 rounded-full p-1 flex-shrink-0"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+                <div>
+                    <h4 class="font-bold text-xs text-indigo-400">Status Update</h4>
+                    <p class="text-xs text-gray-300 truncate">${message}</p>
+                </div>
+            `;
+            notificationContainer.appendChild(notif);
+            setTimeout(() => {
+                notif.classList.add('opacity-0', 'translate-x-full', 'transition-all', 'duration-500');
+                setTimeout(() => notif.remove(), 500);
+            }, 4000);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            showSkeletons();
+            fetchPlaylist();
+            
+            languageFilter.addEventListener('change', () => {
+                localStorage.setItem('iptv_language_filter', languageFilter.value);
+                applyFilters();
+            });
+            countryFilter.addEventListener('change', () => {
+                localStorage.setItem('iptv_country_filter', countryFilter.value);
+                applyFilters();
+            });
+            typeFilter.addEventListener('change', () => {
+                localStorage.setItem('iptv_type_filter', typeFilter.value);
+                applyFilters();
+            });
+
+            statusFilter.addEventListener('change', applyFilters);
+        });
+
+        async function fetchPlaylist() {
+            try {
+                // Try to load enriched data first
+                const response = await fetch('./enriched_channels.json');
+                if (!response.ok) throw new Error("Enriched data not found");
+                
+                const jsonChannels = await response.json();
+                
+                allChannels = jsonChannels.map(c => ({
+                    name: c.name,
+                    url: c.url,
+                    logo: c.logo,
+                    group: (c.categories && c.categories.length > 0) ? c.categories[0] : 'General',
+                    language: c.language || 'Other',
+                    country: c.country || 'Unknown',
+                    website: c.website,
+                    online: c.online, // Pre-checked status
+                    last_checked: c.last_checked
+                }));
+
+                statusIndicator.textContent = `${allChannels.length.toLocaleString()} Channels`;
+                runClassifierAgent(); // Run AI Agent on loaded data
+                populateFilters();
+                applyFilters();
+                showNotification("Loaded enriched channel data");
+            } catch (err) {
+                console.log("Enriched JSON load failed, falling back to live M3U", err);
+                try {
+                    const response = await fetch(M3U_URL);
+                    const text = await response.text();
+                    parseM3U(text);
+                    runClassifierAgent(); // Run AI Agent
+                    statusIndicator.textContent = `${allChannels.length.toLocaleString()} Channels`;
+                    populateFilters();
+                    applyFilters();
+                } catch (e) {
+                    statusIndicator.textContent = 'Sync Error';
+                    grid.innerHTML = `<div class="col-span-full text-center py-20 text-red-400">Failed to load channels.</div>`;
+                }
+            }
+        }
+
+        function parseM3U(content) {
+            const lines = content.split('\n');
+            const channels = [];
+            let currentChannel = null;
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith('#EXTINF:')) {
+                    const name = line.substring(line.lastIndexOf(',') + 1).trim();
+                    const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+                    const groupMatch = line.match(/group-title="([^"]+)"/);
+                    const langMatch = line.match(/tvg-language="([^"]+)"/);
+                    const countryMatch = line.match(/tvg-country="([^"]+)"/);
+                    
+                    currentChannel = {
+                        name: name || 'Unnamed',
+                        logo: logoMatch ? logoMatch[1] : null,
+                        group: groupMatch ? groupMatch[1] : 'General',
+                        language: langMatch ? langMatch[1] : 'Other',
+                        country: countryMatch ? countryMatch[1] : 'Unknown',
+                        url: ''
+                    };
+                } else if (line.startsWith('http') && currentChannel) {
+                    currentChannel.url = line;
+                    channels.push(currentChannel);
+                    currentChannel = null;
+                }
+            });
+            allChannels = channels;
+        }
+
+        function createChannelCard(channel) {
+            const card = document.createElement('div');
+            card.className = 'channel-card bg-gray-800/40 rounded-2xl p-3 border border-gray-800 hover:border-indigo-500/50 transition-all group relative flex flex-col';
+            
+            // Use local cache if available, otherwise fall back to pre-checked data
+            let isOnline = null;
+            if (channelStatus[channel.url]) {
+                isOnline = channelStatus[channel.url].online;
+            } else if (channel.online !== undefined) {
+                isOnline = channel.online;
+            }
+
+            let statusColor = 'bg-gray-700';
+            if (isOnline === true) statusColor = 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]';
+            else if (isOnline === false) statusColor = 'bg-red-500';
+            
+            const logoHtml = channel.logo
+                ? `<img src="${channel.logo}" class="w-full aspect-square object-contain bg-gray-900/50 rounded-xl mb-3 p-3 transition-transform group-hover:scale-105" onerror="this.src='https://via.placeholder.com/150/111827/FFFFFF?text=${encodeURIComponent(channel.name.charAt(0))}'">`
+                : `<div class="w-full aspect-square bg-indigo-900/10 rounded-xl mb-3 flex items-center justify-center text-indigo-500/50 font-bold text-4xl">${channel.name.charAt(0)}</div>`;
+
+            card.innerHTML = `
+                <div class="absolute top-3 right-3 w-2.5 h-2.5 rounded-full ${statusColor} z-10 transition-colors duration-500" title="Status: ${isOnline === true ? 'Online' : (isOnline === false ? 'Offline' : 'Unknown')}"></div>
+                ${logoHtml}
+                <div class="flex-grow">
+                    <h3 class="text-sm font-bold truncate text-gray-200 group-hover:text-indigo-400 transition-colors">${channel.name}</h3>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mt-1 truncate opacity-60">${channel.group}</p>
+                </div>
+                <div class="mt-4 flex flex-col gap-2">
+                    <button onclick="playChannel('${encodeURIComponent(JSON.stringify(channel)).replace(/'/g, "%27")}')" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all">
+                        Play Online
+                    </button>
+                    <button onclick="openInVLC('${channel.url}')" class="w-full bg-gray-700/50 hover:bg-orange-600 hover:text-white text-gray-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all">
+                        VLC Player
+                    </button>
+                </div>
+            `;
+            return card;
+        }
+
+        function renderChannels(list) {
+            grid.innerHTML = '';
+            if (list.length === 0) {
+                document.getElementById('noResults').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('noResults').classList.add('hidden');
+
+            const displayList = list.slice(0, 300);
+            displayList.forEach(channel => {
+                grid.appendChild(createChannelCard(channel));
+            });
+        }
+
+        function playChannel(encodedChannel) {
+            const channel = JSON.parse(decodeURIComponent(encodedChannel));
+            activeChannel = channel;
+            
+            // UI Updates
+            document.getElementById('currentChannelName').textContent = channel.name;
+            document.getElementById('currentChannelUrl').textContent = channel.url;
+            document.getElementById('playerContainer').classList.remove('hidden');
+            playerError.classList.add('hidden');
+            
+            // Scroll to player
+            document.getElementById('playerContainer').scrollIntoView({ behavior: 'smooth' });
+            
+            loadStream(channel.url);
+        }
+
+        function loadStream(url) {
+            // Strategy List: [Direct, Proxy1, Proxy2, Proxy3...]
+            const strategies = [];
+            
+            // If secure context and http url, skip direct for that specific case to avoid mixed content block
+            if (!(window.location.protocol === 'https:' && url.startsWith('http:'))) {
+                strategies.push({ name: 'Direct', url: url });
+            }
+            
+            PROXIES.forEach((p, i) => {
+                strategies.push({ name: `Backup Player ${i+1}`, url: p(url) });
+            });
+            
+            playStrategy(0, strategies);
+        }
+
+        function playStrategy(index, strategies) {
+            if (index >= strategies.length) {
+                playerError.classList.remove('hidden');
+                document.querySelector('#playerError h3').textContent = "Stream Unavailable";
+                return;
+            }
+
+            const strategy = strategies[index];
+            console.log(`Trying Strategy ${index + 1}: ${strategy.name}`);
+            
+            if(index > 0) showNotification(`Switching to ${strategy.name}...`);
+            
+            if (Hls.isSupported()) {
+                if (hls) hls.destroy();
+                hls = new Hls({
+                   manifestLoadingTimeOut: 15000,
+                   manifestLoadingMaxRetry: 2,
+                   levelLoadingMaxRetry: 2,
+                   fragLoadingMaxRetry: 2,
+                   xhrSetup: function(xhr, url) { xhr.withCredentials = false; }
+                });
+                
+                hls.loadSource(strategy.url);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    video.play().catch(() => {});
+                    playerError.classList.add('hidden');
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                     if (data.fatal) {
+                        console.warn(`Strategy ${strategy.name} failed:`, data);
+                        hls.destroy();
+                        playStrategy(index + 1, strategies); // Switch to next player/proxy
+                     }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                 // Safari Native
+                 video.src = strategy.url;
+                 const errorHandler = (e) => {
+                     video.removeEventListener('error', errorHandler);
+                     playStrategy(index + 1, strategies);
+                 };
+                 video.addEventListener('error', errorHandler);
+                 video.play();
+            }
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                closePlayer();
+            }
+        });
+        
+        // Wire up proxy retry button
+        proxyRetryBtn.addEventListener('click', () => {
+            if(activeChannel) {
+                 playerError.classList.add('hidden');
+                 loadStream(activeChannel.url); // Restart strategy rotation
+            }
+        });
+        
+        // Wire up VLC button in error overlay
+        document.getElementById('vlcFallbackBtn').addEventListener('click', () => {
+            if(activeChannel) openInVLC(activeChannel.url);
+        });
+
+        // Wire up main VLC button
+        document.getElementById('vlcMainBtn').addEventListener('click', () => {
+            if(activeChannel) openInVLC(activeChannel.url);
+        });
+
+        function openInVLC(url) {
+            window.location.href = `vlc://${url}`;
+        }
+
+        function closePlayer() {
+            document.getElementById('playerContainer').classList.add('hidden');
+            video.pause();
+            if (hls) hls.destroy();
+        }
+
+        function showSkeletons() {
+            const template = document.getElementById('skeleton');
+            for(let i=0; i<12; i++) grid.appendChild(template.content.cloneNode(true));
+        }
+
+        /* Scan Logic */
+        const scanBtn = document.getElementById('scanBtn');
+        const scanBtnText = document.getElementById('scanBtnText');
+        let isScanning = false;
+        let scanAbortController = null;
+
+        scanBtn.addEventListener('click', toggleScan);
+
+        function toggleScan() {
+            if (isScanning) {
+                stopScan();
+            } else {
+                startScan();
+            }
+        }
+
+        function stopScan() {
+            isScanning = false;
+            if (scanAbortController) scanAbortController.abort();
+            scanBtn.classList.remove('bg-red-600', 'hover:bg-red-500', 'animate-pulse');
+            scanBtn.classList.add('bg-gray-700', 'hover:bg-indigo-600');
+            scanBtnText.textContent = 'Live Scan';
+            statusIndicator.textContent = `${allChannels.length.toLocaleString()} Channels`;
+        }
+
+        async function startScan() {
+            isScanning = true;
+            scanAbortController = new AbortController();
+            scanBtn.classList.remove('bg-gray-700', 'hover:bg-indigo-600');
+            scanBtn.classList.add('bg-red-600', 'hover:bg-red-500', 'animate-pulse');
+            scanBtnText.textContent = 'Stop Scan';
+            
+            grid.innerHTML = ''; // Clear grid to show only online
+            let onlineCount = 0;
+            let checkedCount = 0;
+            
+            // Scan current filtered list
+            const channelsToCheck = [...getFilteredChannels()];
+            const BATCH_SIZE = 5;
+            
+            async function checkWorker() {
+                while (isScanning && channelsToCheck.length > 0) {
+                    if (scanAbortController.signal.aborted) break;
+                    
+                    const channel = channelsToCheck.shift();
+                    checkedCount++;
+                    statusIndicator.textContent = `Scanning: ${onlineCount} found / ${checkedCount} checked`;
+                    
+                    const isOnline = await checkChannelConnectivity(channel);
+                    
+                    if (isOnline && isScanning) {
+                        onlineCount++;
+                        grid.appendChild(createChannelCard(channel));
+                    }
+                }
+            }
+
+            const workers = Array(BATCH_SIZE).fill(null).map(() => checkWorker());
+            
+            try {
+                await Promise.all(workers);
+            } catch(e) {
+                console.log("Scan stopped");
+            }
+            
+            if (isScanning) {
+                stopScan();
+                statusIndicator.textContent = `Scan Complete: ${onlineCount} Online Channels Found`;
+            }
+        }
+
+        async function checkChannelConnectivity(channel) {
+            let isOnline = false;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                
+                // Try direct first
+                try {
+                    const response = await fetch(channel.url, { 
+                        method: 'HEAD', 
+                        signal: controller.signal 
+                    });
+                    clearTimeout(timeoutId);
+                    if (response.ok) {
+                        isOnline = true;
+                    } else {
+                         // Direct failed or 404, try proxy
+                         isOnline = await checkViaProxy(channel.url);
+                    }
+                } catch (e) {
+                    clearTimeout(timeoutId);
+                    isOnline = await checkViaProxy(channel.url);
+                }
+            } catch (e) {
+                isOnline = false;
+            }
+            
+            updateStatus(channel, isOnline);
+            return isOnline;
+        }
+
+        async function checkViaProxy(url) {
+             try {
+                const proxyUrl = PROXIES[0](url);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                
+                const response = await fetch(proxyUrl, { 
+                    method: 'HEAD', 
+                    signal: controller.signal 
+                });
+                clearTimeout(timeoutId);
+                return response.ok;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        /* AI Classification Agent */
+        let channelClassifications = {};
+        try { 
+            const saved = localStorage.getItem('iptv_classifications');
+            if(saved) channelClassifications = JSON.parse(saved);
+        } catch(e){}
+
+        const TLD_MAP = {
+            '.fr': 'French', '.de': 'German', '.it': 'Italian', '.es': 'Spanish', 
+            '.ru': 'Russian', '.cn': 'Chinese', '.jp': 'Japanese', '.br': 'Portuguese',
+            '.in': 'Hindi', '.uk': 'English', '.us': 'English', '.au': 'English',
+            '.ca': 'English', '.mx': 'Spanish', '.ar': 'Spanish', '.nl': 'Dutch',
+            '.pl': 'Polish', '.tr': 'Turkish'
+        };
+
+        const WORD_MAP = {
+            'bbc': 'English', 'cnn': 'English', 'fox': 'English', 'sky': 'English',
+            'tv5': 'French', 'france': 'French', 'bfm': 'French',
+            'zdf': 'German', 'das erste': 'German', 'wdr': 'German',
+            'rai': 'Italian', 'mediaset': 'Italian',
+            'tve': 'Spanish', 'rtve': 'Spanish', 'antena': 'Spanish',
+            'tamil': 'Tamil',
+            'sun tv': 'Tamil', 'sun news': 'Tamil', 'sun music': 'Tamil', 'sun life': 'Tamil', 'ktv': 'Tamil',
+            'vijay': 'Tamil', 'zee tamil': 'Tamil', 'zee thirai': 'Tamil', 'isaiaruvi': 'Tamil',
+            'jaya': 'Tamil', 'kalaignar': 'Tamil', 'raj': 'Tamil', 'makkal': 'Tamil',
+            'mega': 'Tamil', 'polimer': 'Tamil', 'puthuyugam': 'Tamil', 'vendhar': 'Tamil',
+            'colors tamil': 'Tamil', 'thanthi': 'Tamil', 'puthiya': 'Tamil', 'news7 tamil': 'Tamil',
+            'news18 tamil': 'Tamil', 'adithya': 'Tamil', 'sirippoli': 'Tamil', 'chutti': 'Tamil',
+            'dd tamil': 'Tamil', 'dd podhigai': 'Tamil', 'deepam': 'Tamil', 'ibc': 'Tamil',
+            'tamil vision': 'Tamil', 'vasanth': 'Tamil', 'madhimugam': 'Tamil', 'murasu': 'Tamil',
+            'mk': 'Tamil', 'moon': 'Tamil', 'win': 'Tamil', 'imayam': 'Tamil'
+        };
+
+        function runClassifierAgent() {
+            let updated = false;
+            let classifiedCount = 0;
+            
+            allChannels.forEach(c => {
+                // Use saved classification if available
+                if(channelClassifications[c.url]) {
+                    c.language = channelClassifications[c.url].language;
+                    return;
+                }
+
+                let detected = null;
+                // Check TLD
+                for(const [tld, lang] of Object.entries(TLD_MAP)) {
+                    if(c.url.includes(tld)) { detected = lang; break; }
+                }
+                // Check Name
+                if(!detected) {
+                    const lowerName = c.name.toLowerCase();
+                    for(const [word, lang] of Object.entries(WORD_MAP)) {
+                        if(lowerName.includes(word)) { detected = lang; break; }
+                    }
+                }
+                
+                // Force update if detected as Tamil (fixing Hindi mislabel) or if unclassified
+                if(detected && (c.language === 'Other' || !c.language || c.language === 'Unspecified' || detected === 'Tamil')) {
+                    if(c.language !== detected) {
+                        c.language = detected;
+                        channelClassifications[c.url] = { language: detected };
+                        updated = true;
+                        classifiedCount++;
+                    }
+                }
+            });
+            
+            if(updated) {
+                localStorage.setItem('iptv_classifications', JSON.stringify(channelClassifications));
+                if(classifiedCount > 0) {
+                    showNotification(`AI Agent classified ${classifiedCount} channels`);
+                }
+            }
+        }
+
+        function populateFilters() {
+            // Language
+            const languages = new Set(allChannels.map(c => c.language).filter(l => l));
+            const sortedLanguages = ['All', ...Array.from(languages).sort()];
+            languageFilter.innerHTML = sortedLanguages.map(lang =>
+                `<option value="${lang}" ${lang === savedLanguage ? 'selected' : ''}>${lang}</option>`
+            ).join('');
+
+            // Country
+            const countries = new Set(allChannels.map(c => c.country).filter(c => c && c !== 'Unknown'));
+            const sortedCountries = ['All', ...Array.from(countries).sort()];
+            countryFilter.innerHTML = sortedCountries.map(c =>
+                `<option value="${c}" ${c === savedCountry ? 'selected' : ''}>${c}</option>`
+            ).join('');
+
+            // Type (Group)
+            const types = new Set(allChannels.map(c => c.group).filter(g => g));
+            const sortedTypes = ['All', ...Array.from(types).sort()];
+            typeFilter.innerHTML = sortedTypes.map(t =>
+                `<option value="${t}" ${t === savedType ? 'selected' : ''}>${t}</option>`
+            ).join('');
+        }
+
+        function getFilteredChannels() {
+            const query = searchInput.value.toLowerCase().trim();
+            const lang = languageFilter.value;
+            const country = countryFilter.value;
+            const type = typeFilter.value;
+            const statusMode = statusFilter.value;
+            
+            return allChannels.filter(c => {
+                const matchesSearch = c.name.toLowerCase().includes(query) || c.group.toLowerCase().includes(query);
+                const matchesLang = lang === 'All' || c.language === lang;
+                const matchesCountry = country === 'All' || c.country === country;
+                const matchesType = type === 'All' || c.group === type;
+                
+                let matchesStatus = true;
+                if (statusMode === 'Online') {
+                    const status = channelStatus[c.url];
+                    if (status) {
+                        matchesStatus = status.online;
+                    } else {
+                        matchesStatus = c.online === true;
+                    }
+                }
+
+                return matchesSearch && matchesLang && matchesCountry && matchesType && matchesStatus;
+            });
+        }
+
+        function applyFilters() {
+            renderChannels(getFilteredChannels());
+        }
+
+        let searchDebounce;
+        searchInput.addEventListener('input', (e) => {
+            if (isScanning) stopScan();
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(applyFilters, 250);
+        });
+
+        // Background Monitor: Periodically check random channels
+        setInterval(() => {
+            if (isScanning || allChannels.length === 0) return;
+            // Check 1 random channel every 3 seconds to update background status
+            const randomIdx = Math.floor(Math.random() * allChannels.length);
+            checkChannelConnectivity(allChannels[randomIdx]);
+        }, 3000);
+    </script>
+</body>
+</html>
