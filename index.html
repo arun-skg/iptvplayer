@@ -196,11 +196,10 @@
 
     <script>
         const M3U_URL = 'https://iptv-org.github.io/iptv/index.m3u';
-        // Public CORS proxies to try if direct fetch fails
+        // Proxies (Self-hosted Worker first, then public fallbacks)
         const PROXIES = [
-            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-            (url) => `https://thingproxy.freeboard.io/fetch/${url}`
+            (url) => `/proxy?url=${encodeURIComponent(url)}`,
+            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
         ];
 
         let allChannels = [];
@@ -223,7 +222,7 @@
 
         // Load saved preferences
         let savedLanguage = localStorage.getItem('iptv_language_filter');
-        if (!savedLanguage) savedLanguage = 'Tamil'; // Default to Tamil
+        if (!savedLanguage) savedLanguage = 'All'; // Default to All
         const savedCountry = localStorage.getItem('iptv_country_filter');
         const savedType = localStorage.getItem('iptv_type_filter');
         let channelStatus = {};
