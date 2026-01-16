@@ -32,6 +32,13 @@
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen font-sans custom-scrollbar">
 
+    <!-- Preloader -->
+    <div id="preloader" class="fixed inset-0 bg-gray-900 z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500 mb-4"></div>
+        <h2 class="text-xl font-bold text-white animate-pulse">Loading Channels...</h2>
+        <p id="loaderStatus" class="text-sm text-gray-400 mt-2">Initializing application...</p>
+    </div>
+
     <!-- Header / Search -->
     <header class="sticky top-0 z-50 bg-gray-900/95 backdrop-blur border-b border-gray-800 p-4">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -209,6 +216,8 @@
         const typeFilter = document.getElementById('typeFilter');
         const statusFilter = document.getElementById('statusFilter');
         const notificationContainer = document.getElementById('notificationContainer');
+        const preloader = document.getElementById('preloader');
+        const loaderStatus = document.getElementById('loaderStatus');
         let hls = null;
         let activeChannel = null;
 
@@ -285,6 +294,7 @@
 
         async function fetchPlaylist() {
             try {
+                if(loaderStatus) loaderStatus.textContent = "Fetching channel data...";
                 // Try to load enriched data first
                 const response = await fetch('./enriched_channels.json');
                 if (!response.ok) throw new Error("Enriched data not found");
@@ -304,13 +314,16 @@
                 }));
 
                 statusIndicator.textContent = `${allChannels.length.toLocaleString()} Channels`;
+                if(loaderStatus) loaderStatus.textContent = "Classifying channels...";
                 runClassifierAgent(); // Run AI Agent on loaded data
                 populateFilters();
                 applyFilters();
                 showNotification("Loaded enriched channel data");
+                hidePreloader();
             } catch (err) {
                 console.log("Enriched JSON load failed, falling back to live M3U", err);
                 try {
+                    if(loaderStatus) loaderStatus.textContent = "Fetching live M3U...";
                     const response = await fetch(M3U_URL);
                     const text = await response.text();
                     parseM3U(text);
@@ -318,10 +331,20 @@
                     statusIndicator.textContent = `${allChannels.length.toLocaleString()} Channels`;
                     populateFilters();
                     applyFilters();
+                    hidePreloader();
                 } catch (e) {
                     statusIndicator.textContent = 'Sync Error';
                     grid.innerHTML = `<div class="col-span-full text-center py-20 text-red-400">Failed to load channels.</div>`;
+                    if(loaderStatus) loaderStatus.textContent = "Failed to load.";
+                    setTimeout(hidePreloader, 2000);
                 }
+            }
+        }
+
+        function hidePreloader() {
+            if(preloader) {
+                preloader.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => preloader.remove(), 500);
             }
         }
 
