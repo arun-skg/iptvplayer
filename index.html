@@ -93,6 +93,12 @@
                 </select>
             </div>
 
+            <!-- NSFW Toggle -->
+            <button id="nsfwToggleBtn" class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2 hover:border-red-500 transition-colors">
+                <span class="text-xs font-bold text-gray-300">NSFW</span>
+                <div id="nsfwStatus" class="w-2 h-2 rounded-full bg-gray-500"></div>
+            </button>
+
             <!-- Favorites Filter -->
             <button id="favFilterBtn" class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2 hover:border-indigo-500 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" id="favFilterIcon" class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -140,6 +146,11 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-2m-4 4h8m-4-4v4m1-4h.01" />
                         </svg>
                     </button>
+
+                    <!-- Stream Info Overlay -->
+                    <div id="streamInfo" class="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] font-mono text-gray-300 z-30 hidden pointer-events-none">
+                         <span id="resolutionInfo">--</span> | <span id="bitrateInfo">--</span>
+                    </div>
                     
                     <!-- Error Overlay -->
                     <div id="playerError" class="hidden absolute inset-0 error-overlay flex flex-col items-center justify-center p-8 text-center z-20">
@@ -227,6 +238,8 @@
         // Proxies (Self-hosted Worker first, then public fallbacks)
         const PROXIES = [
             (url) => `/proxy?url=${encodeURIComponent(url)}`,
+            (url) => `https://cors-anywhere.herokuapp.com/${url}`,
+            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
         ];
 
@@ -247,6 +260,11 @@
         const recentGrid = document.getElementById('recentGrid');
         const recentContainer = document.getElementById('recentContainer');
         const pipBtn = document.getElementById('pipBtn');
+        const nsfwToggleBtn = document.getElementById('nsfwToggleBtn');
+        const nsfwStatus = document.getElementById('nsfwStatus');
+        const bitrateInfo = document.getElementById('bitrateInfo');
+        const resolutionInfo = document.getElementById('resolutionInfo');
+        const streamInfo = document.getElementById('streamInfo');
         const notificationContainer = document.getElementById('notificationContainer');
         const preloader = document.getElementById('preloader');
         const loaderStatus = document.getElementById('loaderStatus');
@@ -262,6 +280,7 @@
         const savedCountry = localStorage.getItem('iptv_country_filter');
         const savedType = localStorage.getItem('iptv_type_filter');
         let showFavoritesOnly = false;
+        let showNsfw = false;
         let favorites = JSON.parse(localStorage.getItem('iptv_favorites') || '[]');
         let recentlyPlayed = JSON.parse(localStorage.getItem('iptv_recent') || '[]');
         let channelStatus = {};
@@ -325,6 +344,21 @@
 
             statusFilter.addEventListener('change', applyFilters);
             favFilterBtn.addEventListener('click', toggleFavFilter);
+            nsfwToggleBtn.addEventListener('click', toggleNsfw);
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (activeChannel && document.activeElement.tagName !== 'INPUT') {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        video.paused ? video.play() : video.pause();
+                    } else if (e.code === 'KeyF') {
+                        video.requestFullscreen();
+                    } else if (e.code === 'KeyM') {
+                        video.muted = !video.muted;
+                    }
+                }
+            });
 
             if (document.pictureInPictureEnabled) {
                 pipBtn.classList.remove('hidden');
@@ -345,6 +379,14 @@
             favFilterBtn.classList.toggle('border-indigo-500', showFavoritesOnly);
             favFilterIcon.classList.toggle('text-indigo-500', showFavoritesOnly);
             favFilterIcon.setAttribute('fill', showFavoritesOnly ? 'currentColor' : 'none');
+            applyFilters();
+        }
+
+        function toggleNsfw() {
+            showNsfw = !showNsfw;
+            nsfwStatus.classList.toggle('bg-red-500', showNsfw);
+            nsfwStatus.classList.toggle('bg-gray-500', !showNsfw);
+            nsfwToggleBtn.classList.toggle('border-red-500', showNsfw);
             applyFilters();
         }
 
@@ -584,6 +626,29 @@
             playStrategy(0, strategies);
         }
 
+        class CustomLoader extends Hls.DefaultConfig.loader {
+            constructor(config) {
+                super(config);
+                const load = this.load.bind(this);
+                this.load = (context, config, callbacks) => {
+                    if (context.url && !context.url.startsWith('http')) {
+                         // Attempt to fix relative URLs if the proxy didn't
+                         try {
+                             const base = new URL(this.stats.tfirst ? context.url : activeChannel.url);
+                             context.url = new URL(context.url, base).href;
+                         } catch(e){}
+                    }
+
+                    // Route through proxy if needed
+                    if (window.location.protocol === 'https:' && context.url.startsWith('http:')) {
+                         context.url = PROXIES[0](context.url);
+                    }
+
+                    load(context, config, callbacks);
+                };
+            }
+        }
+
         function playStrategy(index, strategies) {
             if (index >= strategies.length) {
                 playerError.classList.remove('hidden');
@@ -600,10 +665,14 @@
                 if (hls) hls.destroy();
                 hls = new Hls({
                    manifestLoadingTimeOut: 15000,
-                   manifestLoadingMaxRetry: 2,
-                   levelLoadingMaxRetry: 2,
-                   fragLoadingMaxRetry: 2,
-                   xhrSetup: function(xhr, url) { xhr.withCredentials = false; }
+                   manifestLoadingMaxRetry: 4,
+                   levelLoadingMaxRetry: 4,
+                   fragLoadingMaxRetry: 4,
+                   xhrSetup: function(xhr, url) {
+                       xhr.withCredentials = false;
+                   },
+                   pLoader: CustomLoader,
+                   fLoader: CustomLoader
                 });
                 
                 hls.loadSource(strategy.url);
@@ -612,6 +681,13 @@
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
                     video.play().catch(() => {});
                     playerError.classList.add('hidden');
+                    streamInfo.classList.remove('hidden');
+                });
+
+                hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+                    const level = hls.levels[data.level];
+                    resolutionInfo.textContent = `${level.width}x${level.height}`;
+                    bitrateInfo.textContent = `${(level.bitrate / 1000000).toFixed(1)} Mbps`;
                 });
                 
                 hls.on(Hls.Events.ERROR, (event, data) => {
@@ -821,40 +897,52 @@
         function runClassifierAgent() {
             let updated = false;
             let classifiedCount = 0;
-            
-            allChannels.forEach(c => {
-                if(channelClassifications[c.url]) {
-                    c.language = channelClassifications[c.url].language;
-                    return;
+            let index = 0;
+            const CHUNK_SIZE = 500;
+
+            function processChunk() {
+                const end = Math.min(index + CHUNK_SIZE, allChannels.length);
+                for (; index < end; index++) {
+                    const c = allChannels[index];
+                    if (channelClassifications[c.url]) {
+                        c.language = channelClassifications[c.url].language;
+                        continue;
+                    }
+
+                    let detected = null;
+                    for (const [tld, lang] of Object.entries(TLD_MAP)) {
+                        if (c.url.includes(tld)) { detected = lang; break; }
+                    }
+                    if (!detected) {
+                        const lowerName = c.name.toLowerCase();
+                        for (const [word, lang] of Object.entries(WORD_MAP)) {
+                            if (lowerName.includes(word)) { detected = lang; break; }
+                        }
+                    }
+
+                    if (detected && (c.language === 'Other' || !c.language || c.language === 'Unspecified' || detected === 'Tamil')) {
+                        if (c.language !== detected) {
+                            c.language = detected;
+                            channelClassifications[c.url] = { language: detected };
+                            updated = true;
+                            classifiedCount++;
+                        }
+                    }
                 }
 
-                let detected = null;
-                for(const [tld, lang] of Object.entries(TLD_MAP)) {
-                    if(c.url.includes(tld)) { detected = lang; break; }
-                }
-                if(!detected) {
-                    const lowerName = c.name.toLowerCase();
-                    for(const [word, lang] of Object.entries(WORD_MAP)) {
-                        if(lowerName.includes(word)) { detected = lang; break; }
+                if (index < allChannels.length) {
+                    setTimeout(processChunk, 10);
+                } else if (updated) {
+                    localStorage.setItem('iptv_classifications', JSON.stringify(channelClassifications));
+                    if (classifiedCount > 0) {
+                        showNotification(`AI Agent classified ${classifiedCount} channels`);
+                        populateFilters();
+                        applyFilters();
                     }
-                }
-                
-                if(detected && (c.language === 'Other' || !c.language || c.language === 'Unspecified' || detected === 'Tamil')) {
-                    if(c.language !== detected) {
-                        c.language = detected;
-                        channelClassifications[c.url] = { language: detected };
-                        updated = true;
-                        classifiedCount++;
-                    }
-                }
-            });
-            
-            if(updated) {
-                localStorage.setItem('iptv_classifications', JSON.stringify(channelClassifications));
-                if(classifiedCount > 0) {
-                    showNotification(`AI Agent classified ${classifiedCount} channels`);
                 }
             }
+
+            processChunk();
         }
 
         function populateFilters() {
@@ -890,6 +978,7 @@
                 const matchesCountry = country === 'All' || c.country === country;
                 const matchesType = type === 'All' || c.group === type;
                 const matchesFav = !showFavoritesOnly || favorites.includes(c.url);
+                const matchesNsfw = showNsfw || !c.is_nsfw;
                 
                 let matchesStatus = true;
                 if (statusMode === 'Online') {
@@ -901,7 +990,7 @@
                     }
                 }
 
-                return matchesSearch && matchesLang && matchesCountry && matchesType && matchesStatus && matchesFav;
+                return matchesSearch && matchesLang && matchesCountry && matchesType && matchesStatus && matchesFav && matchesNsfw;
             });
         }
 

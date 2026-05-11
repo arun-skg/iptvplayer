@@ -14808,6 +14808,21 @@
     "tvg_id": ""
   },
   {
+    "name": "Auto Plus (576p)",
+    "url": "http://tmptv.sunduk.tv/CH49/index.m3u8",
+    "logo": "https://i.imgur.com/sVc8cFt.png",
+    "country": "RU",
+    "categories": [
+      "auto"
+    ],
+    "languages": [],
+    "language": "Unknown",
+    "website": "https://www.autoplustv.ru/",
+    "is_nsfw": false,
+    "launched": null,
+    "tvg_id": "AutoPlus.ru@SD"
+  },
+  {
     "name": "Auto TV (1080p)",
     "url": "https://cdn4.skygo.mn/live/disk1/AutoTV/DASH-FTA/AutoTV.mpd",
     "logo": null,
@@ -15587,8 +15602,8 @@
     "tvg_id": ""
   },
   {
-    "name": "AXN Asia Indonesia (1080p) [Geo-blocked]",
-    "url": "http://103.58.160.157:8278/720-AXN/playlist.m3u8",
+    "name": "AXN Asia Indonesia (720p)",
+    "url": "https://cdn10jtedge.indihometv.com/atm/DASH/axn/manifest.mpd",
     "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/AXN_logo_%282015%29.svg/960px-AXN_logo_%282015%29.svg.png",
     "country": "SG",
     "categories": [
@@ -76044,6 +76059,66 @@
     "tvg_id": "KinoBarrandov.cz@SD"
   },
   {
+    "name": "KinoHit (576p)",
+    "url": "http://tmptv.sunduk.tv/CH57/index.m3u8",
+    "logo": "https://i.imgur.com/Ge8vkQM.png",
+    "country": "RU",
+    "categories": [
+      "movies"
+    ],
+    "languages": [],
+    "language": "Unknown",
+    "website": "https://www.nastroykino.ru/kinohit/",
+    "is_nsfw": false,
+    "launched": null,
+    "tvg_id": "KinoHit.ru@SD"
+  },
+  {
+    "name": "Kinokomedija (576p)",
+    "url": "http://tmptv.sunduk.tv/CH47/index.m3u8",
+    "logo": "https://i.imgur.com/dVjtth0.png",
+    "country": "RU",
+    "categories": [
+      "comedy"
+    ],
+    "languages": [],
+    "language": "Unknown",
+    "website": "https://www.nastroykino.ru/kinokomedija/",
+    "is_nsfw": false,
+    "launched": null,
+    "tvg_id": "Kinokomedija.ru@SD"
+  },
+  {
+    "name": "Kinosemja (576p)",
+    "url": "http://tmptv.sunduk.tv/CH25/index.m3u8",
+    "logo": "https://i.imgur.com/4BF5VeK.png",
+    "country": "RU",
+    "categories": [
+      "movies"
+    ],
+    "languages": [],
+    "language": "Unknown",
+    "website": "https://www.nastroykino.ru/kinosemja/",
+    "is_nsfw": false,
+    "launched": null,
+    "tvg_id": "Kinosemja.ru@SD"
+  },
+  {
+    "name": "Kinosvidanie (576p)",
+    "url": "http://tmptv.sunduk.tv/CH21/index.m3u8",
+    "logo": "https://i.imgur.com/ZRaWqxj.png",
+    "country": "RU",
+    "categories": [
+      "movies"
+    ],
+    "languages": [],
+    "language": "Unknown",
+    "website": "https://www.nastroykino.ru/kinosvidanie/",
+    "is_nsfw": false,
+    "launched": null,
+    "tvg_id": "Kinosvidanie.ru@SD"
+  },
+  {
     "name": "Kinoteatr (1080p)",
     "url": "https://stream8.cinerama.uz/1009/tracks-v1a1/playlist.m3u8",
     "logo": "https://i.imgur.com/emH1BgC.png",
@@ -128379,6 +128454,21 @@
     "tvg_id": "RodjaTV.id@SD"
   },
   {
+    "name": "Rodnoe Kino (576p)",
+    "url": "http://tmptv.sunduk.tv/CH23/index.m3u8",
+    "logo": "https://i.imgur.com/H70LxoZ.png",
+    "country": "RU",
+    "categories": [
+      "movies"
+    ],
+    "languages": [],
+    "language": "Unknown",
+    "website": "https://www.nastroykino.ru/rodnoe-kino/",
+    "is_nsfw": false,
+    "launched": null,
+    "tvg_id": "RodnoeKino.ru@SD"
+  },
+  {
     "name": "Rohi (576p)",
     "url": "http://103.250.28.74:8000/play/a00d/index.m3u8",
     "logo": "https://i.imgur.com/zC8hXi4.png",
@@ -143972,8 +144062,8 @@
     "tvg_id": ""
   },
   {
-    "name": "Super Digital TV (720p) [Not 24/7]",
-    "url": "https://inliveserver.com:1936/11516/11516/playlist.m3u8",
+    "name": "Super Digital TV (1080p) [Not 24/7]",
+    "url": "https://stream.inliveserver.com:19360/8006/8006.m3u8",
     "logo": "https://www.vivalivetv.com/public/files/shows/0/1/3431-294x165-FFFFFF.jpg",
     "country": "DO",
     "categories": [
@@ -181756,21 +181846,6 @@
     "tvg_id": "AbazaTV.ru@SD"
   },
   {
-    "name": "Авто Плюс (576p)",
-    "url": "http://31.148.48.15/Avto_Plus/index.m3u8",
-    "logo": "https://i.imgur.com/sVc8cFt.png",
-    "country": "RU",
-    "categories": [
-      "auto"
-    ],
-    "languages": [],
-    "language": "Unknown",
-    "website": "https://www.autoplustv.ru/",
-    "is_nsfw": false,
-    "launched": null,
-    "tvg_id": "AutoPlus.ru@SD"
-  },
-  {
     "name": "Аист ТВ (1080p)",
     "url": "http://live2-aisttv.cdnvideo.ru/aisttv2/aisttv.sdp/playlist.m3u8",
     "logo": "https://i.imgur.com/bcw0s4V.png",
@@ -184413,21 +184488,6 @@
     "is_nsfw": false,
     "launched": null,
     "tvg_id": "RZDTV.ru@SD"
-  },
-  {
-    "name": "Родное Кино (576p)",
-    "url": "http://31.148.48.15/Rodnoe_kino/index.m3u8",
-    "logo": "https://i.imgur.com/H70LxoZ.png",
-    "country": "RU",
-    "categories": [
-      "movies"
-    ],
-    "languages": [],
-    "language": "Unknown",
-    "website": "https://www.nastroykino.ru/rodnoe-kino/",
-    "is_nsfw": false,
-    "launched": null,
-    "tvg_id": "RodnoeKino.ru@SD"
   },
   {
     "name": "Россия 1 (1080p)",
