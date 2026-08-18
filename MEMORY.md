@@ -14,3 +14,7 @@ Auto-appended by Claude Code (SessionEnd hook) with new git commits per session.
 - 82739bb build: Add wrangler.json for Worker deployment
 - 94de6c5 chore: Update channel data and add gitignore
 <!-- ai-log-head:961a1e9 -->
+
+## 2026-08-18 15:23 — main
+- 79ec188 Add SP Robotic Works baseplate FreeCAD generator + STL/STEP exports
+<!-- ai-log-head:79ec188 -->
