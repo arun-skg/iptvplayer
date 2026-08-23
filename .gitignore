@@ -3,3 +3,6 @@ node_modules/
 .vscode/
 .DS_Store
 *.log
+
+# Local AI session log (SessionEnd hook) — kept local, not published
+/MEMORY.md
