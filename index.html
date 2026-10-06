@@ -6,6 +6,8 @@
     <title>IPTV Explorer - Web & VLC</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dashjs/4.7.4/dash.all.min.js"></script>
+    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
     <style>
         .channel-card:hover {
             transform: translateY(-4px);
@@ -60,6 +62,17 @@
                 <select id="statusFilter" class="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none pr-4">
                     <option value="All">All Status</option>
                     <option value="Online">Online Only</option>
+                </select>
+            </div>
+
+            <!-- Protocol Filter -->
+            <div class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <select id="protocolFilter" class="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none pr-4">
+                    <option value="All">All Protocols</option>
+                    <option value="https">HTTPS Only</option>
                 </select>
             </div>
 
@@ -133,18 +146,14 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                         </div>
-                        <h3 class="text-xl font-bold text-white mb-2">Browser Security Block</h3>
+                        <h3 class="text-xl font-bold text-white mb-2">Connection Failed</h3>
                         <p class="text-sm text-gray-400 max-w-md mb-8">
-                            This stream is protected by CORS policies that prevent browser-based playback. 
-                            <span class="text-indigo-400 block mt-2 font-medium">Please use VLC to bypass browser restrictions.</span>
+                            The stream could not be loaded. This might be due to a network issue or browser security (CORS) blocking the connection.
                         </p>
                         <div class="flex flex-wrap justify-center gap-4">
-                            <button id="vlcFallbackBtn" class="bg-orange-600 hover:bg-orange-500 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:scale-105 shadow-xl shadow-orange-900/20">
+                             <button id="vlcFallbackBtn" class="bg-orange-600 hover:bg-orange-500 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:scale-105 shadow-xl shadow-orange-900/20">
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/e/e6/VLC_Icon.svg" class="h-5 w-5" alt="VLC">
                                 Open in VLC
-                            </button>
-                            <button id="proxyRetryBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-bold transition-all text-sm">
-                                Try with Proxy (Experimental)
                             </button>
                         </div>
                     </div>
@@ -167,6 +176,10 @@
                     <p id="currentChannelUrl" class="text-xs text-gray-500 font-mono truncate opacity-60"></p>
                 </div>
                 <div class="flex gap-2 shrink-0">
+                   <button id="castMainBtn" class="flex items-center gap-2 bg-gray-700 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold transition-all text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 17a3 3 0 013 3H3v-3zm0-4a7 7 0 017 7H8a5 5 0 00-5-5v-2zm0-4a11 11 0 0111 11h-2A9 9 0 003 11V9z"/></svg>
+                        Cast to TV
+                   </button>
                    <button id="vlcMainBtn" class="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all text-sm">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/e/e6/VLC_Icon.svg" class="h-4 w-4" alt="VLC">
                         VLC
@@ -196,10 +209,12 @@
 
     <script>
         const M3U_URL = 'https://iptv-org.github.io/iptv/index.m3u';
-        // Proxies (Self-hosted Worker first, then public fallbacks)
+        // PROXY ENGINE: Tries multiple CORS proxies if direct connection fails.
         const PROXIES = [
-            (url) => `/proxy?url=${encodeURIComponent(url)}`,
-            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
+           (url) => `/proxy?url=${encodeURIComponent(url)}`, // Self-hosted worker
+           (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // AllOrigins
+           (url) => `https://cors-anywhere.herokuapp.com/${url}`, // Cors-Anywhere
+           (url) => `https://corsproxy.io/?${encodeURIComponent(url)}` // corsproxy.io fallback
         ];
 
         let allChannels = [];
@@ -214,11 +229,18 @@
         const countryFilter = document.getElementById('countryFilter');
         const typeFilter = document.getElementById('typeFilter');
         const statusFilter = document.getElementById('statusFilter');
+        const protocolFilter = document.getElementById('protocolFilter');
         const notificationContainer = document.getElementById('notificationContainer');
         const preloader = document.getElementById('preloader');
         const loaderStatus = document.getElementById('loaderStatus');
         let hls = null;
+        let dash = null;
         let activeChannel = null;
+
+        function destroyPlayers() {
+            if (hls) { try { hls.destroy(); } catch(e){} hls = null; }
+            if (dash) { try { dash.reset(); } catch(e){} dash = null; }
+        }
 
         // Load saved preferences
         let savedLanguage = localStorage.getItem('iptv_language_filter');
@@ -285,6 +307,13 @@
             });
 
             statusFilter.addEventListener('change', applyFilters);
+
+            const savedProtocol = localStorage.getItem('iptv_protocol_filter');
+            if (savedProtocol) protocolFilter.value = savedProtocol;
+            protocolFilter.addEventListener('change', () => {
+                localStorage.setItem('iptv_protocol_filter', protocolFilter.value);
+                applyFilters();
+            });
         });
 
         async function fetchPlaylist() {
@@ -388,8 +417,6 @@
             if (isOnline === true) statusColor = 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]';
             else if (isOnline === false) statusColor = 'bg-red-500';
             
-            const isHttp = channel.url.startsWith('http://');
-
             const logoHtml = channel.logo
                 ? `<img src="${channel.logo}" class="w-full aspect-square object-contain bg-gray-900/50 rounded-xl mb-3 p-3 transition-transform group-hover:scale-105" onerror="this.src='https://via.placeholder.com/150/111827/FFFFFF?text=${encodeURIComponent(channel.name.charAt(0))}'">`
                 : `<div class="w-full aspect-square bg-indigo-900/10 rounded-xl mb-3 flex items-center justify-center text-indigo-500/50 font-bold text-4xl">${channel.name.charAt(0)}</div>`;
@@ -403,18 +430,22 @@
                 </div>
                 <div class="mt-4 flex flex-col gap-2">
                     <div class="relative group/playbtn">
-                        <button 
-                            onclick="${isHttp ? '' : `playChannel('${encodeURIComponent(JSON.stringify(channel)).replace(/'/g, "%27")}')`}" 
-                            class="w-full ${isHttp ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white'} text-[11px] font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all"
-                            ${isHttp ? 'disabled' : ''}
+                        <button
+                            onclick="playChannel('${encodeURIComponent(JSON.stringify(channel)).replace(/'/g, "%27")}')"
+                            class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all"
                         >
                             Play Online
                         </button>
-                        ${isHttp ? `<div class="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold opacity-0 group-hover/playbtn:opacity-100 transition-opacity bg-gray-800/80 rounded-lg p-1 text-center">We are working to fix this issue</div>` : ''}
                     </div>
-                    <button onclick="openInVLC('${channel.url}')" class="w-full bg-gray-700/50 hover:bg-orange-600 hover:text-white text-gray-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all">
-                        VLC Player
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="openInVLC('${channel.url}', '${channel.name.replace(/['\\]/g, '')}')" class="flex-1 bg-gray-700/50 hover:bg-orange-600 hover:text-white text-gray-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-2 transition-all">
+                            VLC
+                        </button>
+                        <button onclick="castChannel('${channel.url}', '${channel.name.replace(/['\\]/g, '')}')" class="flex-1 bg-gray-700/50 hover:bg-blue-600 hover:text-white text-gray-400 text-[10px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all" title="Cast to TV">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 17a3 3 0 013 3H3v-3zm0-4a7 7 0 017 7H8a5 5 0 00-5-5v-2zm0-4a11 11 0 0111 11h-2A9 9 0 003 11V9z"/></svg>
+                            Cast
+                        </button>
+                    </div>
                 </div>
             `;
             return card;
@@ -449,31 +480,64 @@
         }
 
         function loadStream(url) {
-            const strategies = [];
-            
-            if (!(window.location.protocol === 'https:' && url.startsWith('http:'))) {
-                strategies.push({ name: 'Direct', url: url });
-            }
-            
-            PROXIES.forEach((p, i) => {
-                strategies.push({ name: `Backup Player ${i+1}`, url: p(url) });
-            });
-            
-            playStrategy(0, strategies);
+           const strategies = [];
+           const isMixedContent = window.location.protocol === 'https:' && url.startsWith('http:');
+
+           if (isMixedContent) {
+               // HTTP stream on an HTTPS page: browser blocks it directly.
+               // Only the self-hosted worker can play it, because it rewrites the
+               // manifest so segments also flow back over HTTPS.
+               strategies.push({ name: 'Secure Proxy', url: PROXIES[0](url) });
+           } else {
+               // Method 1: Direct connection (works for HTTPS streams with CORS).
+               strategies.push({ name: 'Direct', url: url });
+               // Method 2: Self-hosted worker (fixes CORS + rewrites manifest).
+               strategies.push({ name: 'Secure Proxy', url: PROXIES[0](url) });
+               // Last resort: public CORS proxies (manifest-only, may fail on HLS).
+               PROXIES.slice(1).forEach((p, i) => {
+                   strategies.push({ name: `Public Tunnel ${i + 1}`, url: p(url) });
+               });
+           }
+
+           playStrategy(0, strategies);
         }
 
         function playStrategy(index, strategies) {
-            if (index >= strategies.length) {
-                playerError.classList.remove('hidden');
-                document.querySelector('#playerError h3').textContent = "Stream Unavailable";
-                return;
-            }
+           if (index >= strategies.length) {
+               playerError.classList.remove('hidden');
+               // document.querySelector('#playerError h3').textContent = "Connection Failed";
+               // document.querySelector('#playerError p').textContent = "All connection methods, including direct and proxied tunnels, have failed. The stream may be offline or protected.";
+               updateStatus(activeChannel, false);
+               return;
+           }
 
             const strategy = strategies[index];
             console.log(`Trying Strategy ${index + 1}: ${strategy.name}`);
-            
+
             if(index > 0) showNotification(`Switching to ${strategy.name}...`);
-            
+
+            destroyPlayers();
+
+            // MPEG-DASH (.mpd) streams need dash.js, not HLS.js.
+            const isDash = strategy.url.split('?')[0].toLowerCase().includes('.mpd')
+                || (activeChannel && activeChannel.url.toLowerCase().includes('.mpd'));
+
+            if (isDash && window.dashjs) {
+                dash = dashjs.MediaPlayer().create();
+                video.crossOrigin = "anonymous";
+                dash.on(dashjs.MediaPlayer.events.ERROR, (e) => {
+                    console.warn(`DASH strategy ${strategy.name} failed:`, e);
+                    updateStatus(activeChannel, false);
+                    playStrategy(index + 1, strategies);
+                });
+                dash.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
+                    playerError.classList.add('hidden');
+                    updateStatus(activeChannel, true);
+                });
+                dash.initialize(video, strategy.url, true);
+                return;
+            }
+
             if (Hls.isSupported()) {
                 if (hls) hls.destroy();
                 hls = new Hls({
@@ -481,8 +545,11 @@
                    manifestLoadingMaxRetry: 2,
                    levelLoadingMaxRetry: 2,
                    fragLoadingMaxRetry: 2,
-                   xhrSetup: function(xhr, url) { xhr.withCredentials = false; }
+                   xhrSetup: function(xhr, url) {
+                       xhr.withCredentials = false;
+                   }
                 });
+                video.crossOrigin = "anonymous";
                 
                 hls.loadSource(strategy.url);
                 hls.attachMedia(video);
@@ -493,20 +560,31 @@
                 });
                 
                 hls.on(Hls.Events.ERROR, (event, data) => {
-                     if (data.fatal) {
-                        console.warn(`Strategy ${strategy.name} failed:`, data);
-                        hls.destroy();
-                        playStrategy(index + 1, strategies);
-                     }
+                    if (data.fatal) {
+                       console.warn(`Strategy ${strategy.name} failed:`, data);
+                       updateStatus(activeChannel, false); // Mark as offline on fatal error
+                       hls.destroy();
+                       playStrategy(index + 1, strategies);
+                    } else {
+                       // For non-fatal errors, we can also choose to retry or just log it.
+                       // For now, we log it and let HLS.js handle retries internally.
+                       console.log("HLS.js non-fatal error:", data);
+                    }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                 video.src = strategy.url;
-                 const errorHandler = (e) => {
-                     video.removeEventListener('error', errorHandler);
-                     playStrategy(index + 1, strategies);
-                 };
-                 video.addEventListener('error', errorHandler);
-                 video.play();
+                video.src = strategy.url;
+                video.crossOrigin = "anonymous";
+                const errorHandler = (e) => {
+                    console.warn(`Native player failed for ${strategy.name}:`, e);
+                    video.removeEventListener('error', errorHandler);
+                    updateStatus(activeChannel, false);
+                    playStrategy(index + 1, strategies);
+                };
+                video.addEventListener('error', errorHandler);
+                video.addEventListener('loadedmetadata', () => {
+                   updateStatus(activeChannel, true); // Mark as online
+                });
+                video.play().catch(errorHandler);
             }
         }
 
@@ -516,12 +594,6 @@
             }
         });
         
-        proxyRetryBtn.addEventListener('click', () => {
-            if(activeChannel) {
-                 playerError.classList.add('hidden');
-                 loadStream(activeChannel.url);
-            }
-        });
         
         document.getElementById('vlcFallbackBtn').addEventListener('click', () => {
             if(activeChannel) openInVLC(activeChannel.url);
@@ -531,14 +603,151 @@
             if(activeChannel) openInVLC(activeChannel.url);
         });
 
-        function openInVLC(url) {
-            window.location.href = `vlc://${url}`;
+        document.getElementById('castMainBtn').addEventListener('click', () => {
+            if(activeChannel) castChannel(activeChannel.url, activeChannel.name);
+        });
+
+        /* ---------- Google Cast (Chromecast) ---------- */
+        let castInitDone = false;
+
+        // The SDK calls this when the framework finishes loading.
+        window.__onGCastApiAvailable = function(isAvailable) {
+            if (isAvailable) initCast();
+        };
+
+        function initCast() {
+            if (castInitDone) return true;
+            if (!(window.cast && window.cast.framework && window.chrome && window.chrome.cast)) {
+                return false; // framework not ready yet
+            }
+            cast.framework.CastContext.getInstance().setOptions({
+                receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+                autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+            });
+            cast.framework.CastContext.getInstance().addEventListener(
+                cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+                (event) => {
+                    const s = event.sessionState;
+                    const connected = s === cast.framework.SessionState.SESSION_STARTED
+                        || s === cast.framework.SessionState.SESSION_RESUMED;
+                    const btn = document.getElementById('castMainBtn');
+                    if (btn) btn.classList.toggle('bg-blue-600', connected);
+                }
+            );
+            castInitDone = true;
+            return true;
+        }
+
+        // Wait up to ~5s for the async SDK to load before giving up.
+        function waitForCast() {
+            return new Promise((resolve) => {
+                if (initCast()) return resolve(true);
+                let tries = 0;
+                const iv = setInterval(() => {
+                    tries++;
+                    if (initCast()) { clearInterval(iv); resolve(true); }
+                    else if (tries > 25) { clearInterval(iv); resolve(false); }
+                }, 200);
+            });
+        }
+
+        // The TV fetches the URL itself, so HTTP streams must go through the
+        // HTTPS proxy (absolute URL) and need the right MIME type.
+        function buildCastUrl(url) {
+            if (url.startsWith('http:')) {
+                return `${window.location.origin}/proxy?url=${encodeURIComponent(url)}`;
+            }
+            return url;
+        }
+
+        function castMimeType(url) {
+            const u = url.split('?')[0].toLowerCase();
+            if (u.includes('.mpd')) return 'application/dash+xml';
+            if (u.endsWith('.mp4')) return 'video/mp4';
+            return 'application/x-mpegurl'; // HLS / default
+        }
+
+        // Called straight from the click so Chrome allows the device picker.
+        function castChannel(url, name) {
+            if (!initCast()) {
+                // Framework still loading (rare). Warm it up and ask for a retry
+                // so the next click carries a fresh user gesture to the picker.
+                showNotification('Cast is loading — click Cast again in a moment');
+                waitForCast();
+                return;
+            }
+
+            const context = cast.framework.CastContext.getInstance();
+
+            const loadToSession = (session) => {
+                if (!session) return;
+                const mediaInfo = new chrome.cast.media.MediaInfo(buildCastUrl(url), castMimeType(url));
+                mediaInfo.streamType = chrome.cast.media.StreamType.LIVE;
+                mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+                mediaInfo.metadata.title = name || 'IPTV Channel';
+                const req = new chrome.cast.media.LoadRequest(mediaInfo);
+                session.loadMedia(req).then(
+                    () => showNotification(`Casting "${name || 'channel'}" to TV`),
+                    (err) => showNotification('Cast failed: ' + (err && err.description || err))
+                );
+            };
+
+            // Already connected to a TV? Just load onto it.
+            const existing = context.getCurrentSession();
+            if (existing) { loadToSession(existing); return; }
+
+            // Otherwise open Chrome's device-picker popup (synchronous = gesture kept).
+            let ret;
+            try {
+                ret = context.requestSession();
+            } catch (e) {
+                console.error('requestSession threw', e);
+                showNotification('Cast error (throw): ' + (e && e.message || e));
+                return;
+            }
+            if (ret && typeof ret.then === 'function') {
+                ret.then(
+                    () => loadToSession(context.getCurrentSession()),
+                    (err) => {
+                        console.error('requestSession rejected', err);
+                        if (err === 'cancel') return; // user closed the picker
+                        showNotification('Cast picker error: ' + JSON.stringify(err));
+                    }
+                );
+            }
+        }
+
+        function openInVLC(url, name) {
+            const safeName = (name || (activeChannel && activeChannel.name) || 'channel')
+                .replace(/[^\w\- ]/g, '').trim() || 'channel';
+
+            // 1) Try the vlc:// protocol handler (works if VLC registered it).
+            try {
+                const frame = document.createElement('iframe');
+                frame.style.display = 'none';
+                frame.src = `vlc://${url}`;
+                document.body.appendChild(frame);
+                setTimeout(() => frame.remove(), 1500);
+            } catch (e) {}
+
+            // 2) Reliable fallback: give the OS an .m3u playlist that opens in VLC.
+            const m3u = `#EXTM3U\n#EXTINF:-1,${safeName}\n${url}\n`;
+            const blob = new Blob([m3u], { type: 'audio/x-mpegurl' });
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = `${safeName}.m3u`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { a.remove(); URL.revokeObjectURL(blobUrl); }, 1500);
+
+            showNotification(`Opening "${safeName}" in VLC…`);
         }
 
         function closePlayer() {
             document.getElementById('playerContainer').classList.add('hidden');
             video.pause();
-            if (hls) hls.destroy();
+            destroyPlayers();
         }
 
         function showSkeletons() {
@@ -760,12 +969,14 @@
             const country = countryFilter.value;
             const type = typeFilter.value;
             const statusMode = statusFilter.value;
-            
+            const protocol = protocolFilter.value;
+
             return allChannels.filter(c => {
                 const matchesSearch = c.name.toLowerCase().includes(query) || c.group.toLowerCase().includes(query);
                 const matchesLang = lang === 'All' || c.language === lang;
                 const matchesCountry = country === 'All' || c.country === country;
                 const matchesType = type === 'All' || c.group === type;
+                const matchesProtocol = protocol === 'All' || (protocol === 'https' && c.url.startsWith('https:'));
                 
                 let matchesStatus = true;
                 if (statusMode === 'Online') {
@@ -777,7 +988,7 @@
                     }
                 }
 
-                return matchesSearch && matchesLang && matchesCountry && matchesType && matchesStatus;
+                return matchesSearch && matchesLang && matchesCountry && matchesType && matchesStatus && matchesProtocol;
             });
         }
 

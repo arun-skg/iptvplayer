@@ -6,3 +6,4 @@ node_modules/
 
 # Local AI session log (SessionEnd hook) — kept local, not published
 /MEMORY.md
+.wrangler/
