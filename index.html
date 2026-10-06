@@ -105,6 +105,14 @@
                     <option value="All">All Types</option>
                 </select>
             </div>
+
+            <!-- Favorites Filter -->
+            <button id="favFilterBtn" class="bg-gray-800 rounded-full px-4 py-2 border border-gray-700 flex items-center gap-2 hover:border-indigo-500 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" id="favFilterIcon" class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.382-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+                <span class="text-xs font-bold text-gray-300">Favorites</span>
+            </button>
             
             <div class="relative flex-grow max-w-xl">
                 <input 
@@ -138,6 +146,13 @@
             <div class="relative group">
                 <div class="bg-black rounded-2xl overflow-hidden video-glow border border-gray-800 aspect-video relative shadow-2xl">
                     <video id="videoPlayer" controls class="w-full h-full bg-black"></video>
+
+                    <!-- PiP Button -->
+                    <button id="pipBtn" class="absolute bottom-4 right-16 bg-black/60 hover:bg-indigo-600 text-white p-2 rounded-lg transition-all z-30 hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-2m-4 4h8m-4-4v4m1-4h.01" />
+                        </svg>
+                    </button>
                     
                     <!-- Error Overlay -->
                     <div id="playerError" class="hidden absolute inset-0 error-overlay flex flex-col items-center justify-center p-8 text-center z-20">
@@ -188,6 +203,19 @@
             </div>
         </section>
 
+        <!-- Recently Played -->
+        <div id="recentContainer" class="hidden mb-12">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-indigo-600/20 p-2 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-white">Recently Played</h2>
+            </div>
+            <div id="recentGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5"></div>
+        </div>
+
         <!-- Channel Grid -->
         <div id="channelsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5"></div>
 
@@ -230,12 +258,20 @@
         const typeFilter = document.getElementById('typeFilter');
         const statusFilter = document.getElementById('statusFilter');
         const protocolFilter = document.getElementById('protocolFilter');
+        const favFilterBtn = document.getElementById('favFilterBtn');
+        const favFilterIcon = document.getElementById('favFilterIcon');
+        const recentGrid = document.getElementById('recentGrid');
+        const recentContainer = document.getElementById('recentContainer');
+        const pipBtn = document.getElementById('pipBtn');
         const notificationContainer = document.getElementById('notificationContainer');
         const preloader = document.getElementById('preloader');
         const loaderStatus = document.getElementById('loaderStatus');
         let hls = null;
         let dash = null;
         let activeChannel = null;
+        let currentPage = 1;
+        const itemsPerPage = 60;
+        let filteredList = [];
 
         function destroyPlayers() {
             if (hls) { try { hls.destroy(); } catch(e){} hls = null; }
@@ -247,6 +283,9 @@
         if (!savedLanguage) savedLanguage = 'Tamil'; // Default to Tamil
         const savedCountry = localStorage.getItem('iptv_country_filter');
         const savedType = localStorage.getItem('iptv_type_filter');
+        let showFavoritesOnly = false;
+        let favorites = JSON.parse(localStorage.getItem('iptv_favorites') || '[]');
+        let recentlyPlayed = JSON.parse(localStorage.getItem('iptv_recent') || '[]');
         let channelStatus = {};
         try {
             const savedStatus = localStorage.getItem('iptv_channel_status');
@@ -314,7 +353,61 @@
                 localStorage.setItem('iptv_protocol_filter', protocolFilter.value);
                 applyFilters();
             });
+
+            favFilterBtn.addEventListener('click', toggleFavFilter);
+
+            if (document.pictureInPictureEnabled) {
+                pipBtn.classList.remove('hidden');
+                pipBtn.addEventListener('click', () => {
+                    if (document.pictureInPictureElement) {
+                        document.exitPictureInPicture();
+                    } else {
+                        video.requestPictureInPicture();
+                    }
+                });
+            }
+
+            renderRecent();
         });
+
+        function toggleFavFilter() {
+            showFavoritesOnly = !showFavoritesOnly;
+            favFilterBtn.classList.toggle('border-indigo-500', showFavoritesOnly);
+            favFilterIcon.classList.toggle('text-indigo-500', showFavoritesOnly);
+            favFilterIcon.setAttribute('fill', showFavoritesOnly ? 'currentColor' : 'none');
+            applyFilters();
+        }
+
+        function toggleFavorite(url, event) {
+            event.stopPropagation();
+            const index = favorites.indexOf(url);
+            if (index > -1) {
+                favorites.splice(index, 1);
+            } else {
+                favorites.push(url);
+            }
+            localStorage.setItem('iptv_favorites', JSON.stringify(favorites));
+            applyFilters();
+            renderRecent();
+        }
+
+        function addToRecent(channel) {
+            recentlyPlayed = recentlyPlayed.filter(c => c.url !== channel.url);
+            recentlyPlayed.unshift(channel);
+            if (recentlyPlayed.length > 12) recentlyPlayed.pop();
+            localStorage.setItem('iptv_recent', JSON.stringify(recentlyPlayed));
+            renderRecent();
+        }
+
+        function renderRecent() {
+            recentGrid.innerHTML = '';
+            if (recentlyPlayed.length > 0) {
+                recentContainer.classList.remove('hidden');
+                recentlyPlayed.forEach(c => recentGrid.appendChild(createChannelCard(c)));
+            } else {
+                recentContainer.classList.add('hidden');
+            }
+        }
 
         async function fetchPlaylist() {
             try {
@@ -417,12 +510,18 @@
             if (isOnline === true) statusColor = 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]';
             else if (isOnline === false) statusColor = 'bg-red-500';
             
+            const isFav = favorites.includes(channel.url);
             const logoHtml = channel.logo
-                ? `<img src="${channel.logo}" class="w-full aspect-square object-contain bg-gray-900/50 rounded-xl mb-3 p-3 transition-transform group-hover:scale-105" onerror="this.src='https://via.placeholder.com/150/111827/FFFFFF?text=${encodeURIComponent(channel.name.charAt(0))}'">`
+                ? `<img src="${channel.logo}" loading="lazy" class="w-full aspect-square object-contain bg-gray-900/50 rounded-xl mb-3 p-3 transition-transform group-hover:scale-105" onerror="this.src='https://via.placeholder.com/150/111827/FFFFFF?text=${encodeURIComponent(channel.name.charAt(0))}'">`
                 : `<div class="w-full aspect-square bg-indigo-900/10 rounded-xl mb-3 flex items-center justify-center text-indigo-500/50 font-bold text-4xl">${channel.name.charAt(0)}</div>`;
 
             card.innerHTML = `
-                <div class="absolute top-3 right-3 w-2.5 h-2.5 rounded-full ${statusColor} z-10 transition-colors duration-500" title="Status: ${isOnline === true ? 'Online' : (isOnline === false ? 'Offline' : 'Unknown')}"></div>
+                <div class="absolute top-3 right-3 flex flex-col gap-2 z-10">
+                    <div class="w-2.5 h-2.5 rounded-full ${statusColor} ml-auto" title="Status: ${isOnline === true ? 'Online' : (isOnline === false ? 'Offline' : 'Unknown')}"></div>
+                    <button onclick="toggleFavorite('${channel.url}', event)" class="p-1.5 rounded-full bg-black/40 hover:bg-black/60 transition-all ${isFav ? 'text-yellow-500' : 'text-gray-400'}">
+                        <svg class="w-4 h-4" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.382-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
+                    </button>
+                </div>
                 ${logoHtml}
                 <div class="flex-grow">
                     <h3 class="text-sm font-bold truncate text-gray-200 group-hover:text-indigo-400 transition-colors">${channel.name}</h3>
@@ -451,24 +550,52 @@
             return card;
         }
 
-        function renderChannels(list) {
-            grid.innerHTML = '';
-            if (list.length === 0) {
+        function renderChannels(list, append = false) {
+            if (!append) {
+                grid.innerHTML = '';
+                currentPage = 1;
+                filteredList = list;
+            }
+
+            if (filteredList.length === 0) {
                 document.getElementById('noResults').classList.remove('hidden');
                 return;
             }
             document.getElementById('noResults').classList.add('hidden');
 
-            const displayList = list.slice(0, 300);
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const displayList = filteredList.slice(start, end);
+
             displayList.forEach(channel => {
                 grid.appendChild(createChannelCard(channel));
             });
+
+            if (end < filteredList.length) {
+                setupInfiniteScroll();
+            }
+        }
+
+        function setupInfiniteScroll() {
+            const observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting) {
+                    observer.disconnect();
+                    currentPage++;
+                    renderChannels(filteredList, true);
+                }
+            }, { rootMargin: '400px' });
+
+            if (grid.lastElementChild) {
+                observer.observe(grid.lastElementChild);
+            }
         }
 
         function playChannel(encodedChannel) {
             const channel = JSON.parse(decodeURIComponent(encodedChannel));
             activeChannel = channel;
             
+            addToRecent(channel);
+
             document.getElementById('currentChannelName').textContent = channel.name;
             document.getElementById('currentChannelUrl').textContent = channel.url;
             document.getElementById('playerContainer').classList.remove('hidden');
@@ -892,16 +1019,17 @@
             'zdf': 'German', 'das erste': 'German', 'wdr': 'German',
             'rai': 'Italian', 'mediaset': 'Italian',
             'tve': 'Spanish', 'rtve': 'Spanish', 'antena': 'Spanish',
-            'tamil': 'Tamil',
-            'sun tv': 'Tamil', 'sun news': 'Tamil', 'sun music': 'Tamil', 'sun life': 'Tamil', 'ktv': 'Tamil',
-            'vijay': 'Tamil', 'zee tamil': 'Tamil', 'zee thirai': 'Tamil', 'isaiaruvi': 'Tamil',
-            'jaya': 'Tamil', 'kalaignar': 'Tamil', 'raj': 'Tamil', 'makkal': 'Tamil',
-            'mega': 'Tamil', 'polimer': 'Tamil', 'puthuyugam': 'Tamil', 'vendhar': 'Tamil',
-            'colors tamil': 'Tamil', 'thanthi': 'Tamil', 'puthiya': 'Tamil', 'news7 tamil': 'Tamil',
-            'news18 tamil': 'Tamil', 'adithya': 'Tamil', 'sirippoli': 'Tamil', 'chutti': 'Tamil',
-            'dd tamil': 'Tamil', 'dd podhigai': 'Tamil', 'deepam': 'Tamil', 'ibc': 'Tamil',
-            'tamil vision': 'Tamil', 'vasanth': 'Tamil', 'madhimugam': 'Tamil', 'murasu': 'Tamil',
-            'mk': 'Tamil', 'moon': 'Tamil', 'win': 'Tamil', 'imayam': 'Tamil'
+            'tamil': 'Tamil', 'sun tv': 'Tamil', 'vijay': 'Tamil', 'zee tamil': 'Tamil', 'kalaignar': 'Tamil',
+            'malayalam': 'Malayalam', 'asianet': 'Malayalam', 'mazhavil': 'Malayalam', 'kairali': 'Malayalam', 'amrita': 'Malayalam', 'manorama': 'Malayalam', 'mathrubhumi': 'Malayalam',
+            'telugu': 'Telugu', 'etv': 'Telugu', 'maa tv': 'Telugu', 'gemini': 'Telugu', 'tv9 telugu': 'Telugu', 'sakshi': 'Telugu',
+            'kannada': 'Kannada', 'udaya': 'Kannada', 'suvarna': 'Kannada', 'public tv': 'Kannada', 'tv9 kannada': 'Kannada',
+            'hindi': 'Hindi', 'star plus': 'Hindi', 'zee tv': 'Hindi', 'colors tv': 'Hindi', 'sony tv': 'Hindi', 'aaj tak': 'Hindi', 'ndtv india': 'Hindi',
+            'bengali': 'Bengali', 'star jalsha': 'Bengali', 'zee bangla': 'Bengali',
+            'marathi': 'Marathi', 'star pravah': 'Marathi', 'zee marathi': 'Marathi',
+            'punjabi': 'Punjabi', 'ptc punjabi': 'Punjabi',
+            'gujarati': 'Gujarati', 'colors gujarati': 'Gujarati',
+            'arabic': 'Arabic', 'al jazeera': 'Arabic', 'mbc': 'Arabic',
+            'portuguese': 'Portuguese', 'globo': 'Portuguese', 'sic': 'Portuguese'
         };
 
         function runClassifierAgent() {
@@ -977,7 +1105,8 @@
                 const matchesCountry = country === 'All' || c.country === country;
                 const matchesType = type === 'All' || c.group === type;
                 const matchesProtocol = protocol === 'All' || (protocol === 'https' && c.url.startsWith('https:'));
-                
+                const matchesFav = !showFavoritesOnly || favorites.includes(c.url);
+
                 let matchesStatus = true;
                 if (statusMode === 'Online') {
                     const status = channelStatus[c.url];
@@ -988,7 +1117,7 @@
                     }
                 }
 
-                return matchesSearch && matchesLang && matchesCountry && matchesType && matchesStatus && matchesProtocol;
+                return matchesSearch && matchesLang && matchesCountry && matchesType && matchesStatus && matchesProtocol && matchesFav;
             });
         }
 
